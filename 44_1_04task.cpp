@@ -18,24 +18,25 @@ int free_space = 0;
 node* root;
 node* cur_node;
 node* tmp_node;
-bool created = false;
+char created = 0;
 
 int create(int disk_size)
 {
     if (created) {
         return 0;
     }
-    char* root_name = (char*)malloc(sizeof(char));
+    char* root_name = (char*)malloc(2*sizeof(char));
     if (!root_name) {
         return 0;
     }
-    root_name[0] = '\0';
+    root_name[0] = '/';
+    root_name[1] = '\0';
     root = (node*)malloc(sizeof(node));
     if (!root) {
         free(root_name);
         return 0;
     }
-    created = true;
+    created = 1;
     free_space = disk_size;
     root->name = root_name;
     root->parent = NULL;
@@ -52,7 +53,7 @@ void pwd_logic(node* obj, char* dst, int lvl) {
     if (obj->parent) { // Поднимаемся до корня, потому что только у него нет родителя
         pwd_logic(obj->parent, dst, lvl+1);
     } else { // Добавляем /, потому что добрались до корня(чтобы начинался со / путь)
-        strcat(dst, "/");
+        strcat(dst, obj->name);
         return;
     }
     strcat(dst, obj->name); // Конкатенируем с dst
@@ -69,7 +70,7 @@ void cur_dir(char* dst) {
     pwd_logic(cur_node, dst, 0);
 }
 
-bool validate_path(const char* path) {
+char validate_path(const char* path) {
     char* cur_obj = (char*)malloc(sizeof(char) * 129);
     if (path[0] != '/') {
         cur_dir(cur_obj);
@@ -80,29 +81,29 @@ bool validate_path(const char* path) {
     }
     if (strlen(cur_obj) > MAX_PATH) {
         free(cur_obj);
-        return false;
+        return 0;
     }
     free(cur_obj);
-    return true;
+    return 1;
 }
 
-bool validate_name(const char* name) {
+char validate_name(const char* name) {
     // Проверка на длину имени
     if (strlen(name) > MAX_NAME) {
-        return false;
+        return 0;
     }
     // Проверка на пустую строку
     if (name[0] == '\0') {
-        return false;
+        return 0;
     }
     // Проверка на . и ..
     if (name[0] == '.') {
         if (name[1] == '.') {
-            if (strlen(name) > 2) return false;
-            return true;
+            if (strlen(name) > 2) return 0;
+            return 1;
         }
-        if (strlen(name) > 1) return false;
-        return true;
+        if (strlen(name) > 1) return 0;
+        return 1;
     }
     // Проверка на пригодные символы
     for (int i = 0; name[i] != '\0'; i++) {
@@ -113,9 +114,9 @@ bool validate_name(const char* name) {
             || name[i] == '_') {
             continue;
         }
-        return false;
+        return 0;
     }
-    return true;
+    return 1;
 }
 
 // Выделяем имена между / и возвращаем строку
@@ -394,30 +395,30 @@ int collapse() {
     int res = rm("/", 1);
     if (res) {
         free_space = 0;
-        created = false;
+        created = 0;
         root = NULL;
         cur_node = tmp_node = root;
     }
     return res;
 }
 
-bool starts_with(const char* str, const char* prefix) {
-    if (strlen(str) < strlen(prefix)) return false;
+char starts_with(const char* str, const char* prefix) {
+    if (strlen(str) < strlen(prefix)) return 0;
     for (int i = 0; prefix[i] != '\0'; i++)
-        if (prefix[i] != str[i]) return false;
-    return true;
+        if (prefix[i] != str[i]) return 0;
+    return 1;
 }
 
-bool ends_with(const char* str, const char* suffix) {
+char ends_with(const char* str, const char* suffix) {
     int end = strlen(str);
     int len = strlen(suffix);
-    if (end < len) return false;
+    if (end < len) return 0;
     while (len >= 0) {
-        if (str[end] != suffix[len]) return false;
+        if (str[end] != suffix[len]) return 0;
         --len;
         --end;
     }
-    return true;
+    return 1;
 }
 
 int list(node* current, int dir_first, const char* pref, const char* insert, const char* suffix) {
@@ -468,10 +469,10 @@ int list(node* current, int dir_first, const char* pref, const char* insert, con
     return return_value == 0 ? 0 : 1;
 }
 
-bool is_template(const char* name) {
+char is_template(const char* name) {
     for (int i = 0; name[i] != '\0'; ++i)
-        if (name[i] == '*') return true;
-    return false;
+        if (name[i] == '*') return 1;
+    return 0;
 }
 
 char* get_pref(const char* name) {
@@ -495,12 +496,12 @@ char* get_pref(const char* name) {
 
 char* get_suffix(const char* name) {
     int len = 0;
-    bool begin = false;
+    char begin = 0;
     char* suf = (char*)malloc(sizeof(char) * (MAX_NAME+1));
     for (int i = 0; name[i] != '\0'; ++i) {
         if (!begin) {
             if (name[i] != '*') continue;
-            begin = true;
+            begin = 1;
             continue;
         }
         if (len == 33) {
@@ -550,8 +551,8 @@ int list_logic(node* current, const char* path, const char* pref, int offset, in
 int template_list(const char* path, int dir_first) {
     if (!created) return 0;
     if (!validate_path(path)) return 0;
-    bool asterisk = is_template(path);
-    bool lock = false;
+    char asterisk = is_template(path);
+    char lock = 0;
     if (!asterisk) {
         if (!move(path)) return 0;
         int val = list(tmp_node, dir_first, "", path, "");
@@ -609,7 +610,7 @@ int template_list(const char* path, int dir_first) {
                     int list_return = list_logic(tmp, path, pref, i, dir_first);
                     if (list_return == 0) {
                         return_value = 0;
-                        lock = true;
+                        lock = 1;
                     } else if (!lock) {
                         return_value += list_return;
                     }
@@ -627,6 +628,16 @@ int template_list(const char* path, int dir_first) {
 }
 
 
+int dfs(const node* current, const int lvl) {
+    if (!current) return 0;
+    current == root ?
+    printf("lvl: 0 root\n") : printf("lvl: %d parent %s of obj %s with size %d\n", lvl, current->parent->name, current->name, current->size);
+    dfs(current->children, lvl+1);
+    dfs(current->next_sibling, lvl);
+    return 0;
+}
+
+
 void setup_file_manager(file_manager_t *fm) {
     fm->create = create;
     fm->destroy = collapse;
@@ -637,12 +648,3 @@ void setup_file_manager(file_manager_t *fm) {
     fm->remove = rm;
     fm->list = template_list;
 }
-
-void dfs(const node* current, const int lvl) {
-    if (!current) return;
-    current == root ?
-    printf("lvl: 0 root\n") : printf("lvl: %d %s with size %d\n", lvl, current->name, current->size);
-    dfs(current->children, lvl+1);
-    dfs(current->next_sibling, lvl);
-}
-
